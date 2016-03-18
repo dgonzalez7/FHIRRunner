@@ -22,8 +22,192 @@ public class FHIRRunner3
 		// getAllPatients();
 		
 		// Get all Observations
-		getAllObservations();
+		// getAllObservations();
+		
+		// Get all Conditions
+		// getAllConditions();
+		
+		// Get all Medication
+		getAllMedicationDispence();
 	}
+
+	
+	private static void getAllMedicationDispence() 
+	{
+		final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
+		// String msg = "/Patient/1";
+		
+		HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
+		
+		// Create a client
+		Client client = ClientBuilder.newClient();
+		
+		// Configure client (optional)
+
+		// Set a target
+		WebTarget target = client.target(URI_BASE + "/MedicationDispense");
+		// WebTarget target = client.target(URI_BASE + msg);
+
+		// Get a response
+		// String result = target.request(MediaType.TEXT_XML).get(String.class);
+		String result = target.request().get(String.class);
+
+		System.out.println(result);
+		System.out.println("\nResult length: " + result.length());
+
+		JSONParser parser = new JSONParser();
+		
+		try 
+		{
+			JSONObject jsonResult = (JSONObject) parser.parse(result);
+
+			JSONArray patients = (JSONArray) jsonResult.get("entry");
+			System.out.println("Size: " + patients.size());
+
+			Iterator iEntry = patients.iterator();
+			while (iEntry.hasNext()) 
+			{
+				JSONObject jsonEntry = (JSONObject) iEntry.next();
+				// System.out.println("fullUrl "+ jsonEntry.get("fullUrl"));
+
+				JSONObject resources = (JSONObject) jsonEntry.get("resource");
+				
+				String id = (String) resources.get("id");
+				// String status = (String) resources.get("status");
+
+				// System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate);
+
+				JSONObject medication = (JSONObject) resources.get("medicationCodeableConcept");
+				
+				JSONArray coding = (JSONArray) medication.get("coding");
+
+				Iterator iCoding = coding.iterator();
+
+				while (iCoding.hasNext()) 
+				{
+					JSONObject innerObj = (JSONObject) iCoding.next();
+					String system = (String) innerObj.get("system");
+					String code2 = (String) innerObj.get("code");
+
+					System.out.println("Id: " + id + " System: "+ system + " Code: " + code2);
+
+					if (!system.equals("http://www.nlm.nih.gov/research/umls/rxnorm"))
+					{
+						System.out.println("Unknow Observation System: " + system);
+					}
+					else
+					{
+						buildConditionTable(observationMap, code2);
+					}
+				}
+			}
+		} 
+		catch (ParseException e) 
+		{
+			e.printStackTrace();
+		}
+		
+		System.out.println("\nSize of Medication Table: " + observationMap.size());
+		printObservationTable(observationMap);
+	}
+
+
+	private static void getAllConditions() 
+	{
+		final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
+		// String msg = "/Patient/1";
+		
+		HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
+		
+		// Create a client
+		Client client = ClientBuilder.newClient();
+		
+		// Configure client (optional)
+
+		// Set a target
+		WebTarget target = client.target(URI_BASE + "/Condition");
+		// WebTarget target = client.target(URI_BASE + msg);
+
+		// Get a response
+		// String result = target.request(MediaType.TEXT_XML).get(String.class);
+		String result = target.request().get(String.class);
+
+		// System.out.println(result);
+		System.out.println("\nResult length: " + result.length());
+
+		JSONParser parser = new JSONParser();
+		
+		try 
+		{
+			JSONObject jsonResult = (JSONObject) parser.parse(result);
+
+			JSONArray patients = (JSONArray) jsonResult.get("entry");
+			System.out.println("Size: " + patients.size());
+
+			Iterator iEntry = patients.iterator();
+			while (iEntry.hasNext()) 
+			{
+				JSONObject jsonEntry = (JSONObject) iEntry.next();
+				// System.out.println("fullUrl "+ jsonEntry.get("fullUrl"));
+
+				JSONObject resources = (JSONObject) jsonEntry.get("resource");
+				String id = (String) resources.get("id");
+				// String status = (String) resources.get("status");
+
+				// System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate);
+
+				JSONObject code = (JSONObject) resources.get("code");
+				
+				JSONArray coding = (JSONArray) code.get("coding");
+				
+				// Handle an odd exception (Condition 194)
+				if (coding != null)
+				{
+					Iterator iCoding = coding.iterator();
+
+					while (iCoding.hasNext()) 
+					{
+						JSONObject innerObj = (JSONObject) iCoding.next();
+						String system = (String) innerObj.get("system");
+						String code2 = (String) innerObj.get("code");
+
+						System.out.println("Id: " + id + " System: "+ system + " Code: " + code2);
+
+						if (!system.equals("http://snomed.info/sct"))
+						{
+							System.out.println("Unknow Observation System: " + system);
+						}
+						else
+						{
+							buildConditionTable(observationMap, code2);
+						}
+					}
+				}
+			}
+		} 
+		catch (ParseException e) 
+		{
+			e.printStackTrace();
+		}
+		
+		System.out.println("\nSize of Condition Table: " + observationMap.size());
+		printObservationTable(observationMap);
+	}
+
+	private static void buildConditionTable(
+			HashMap<String, Integer> observationMap, String code) 
+	{
+		if (observationMap.containsKey(code))
+		{
+			int val = observationMap.get(code);
+			observationMap.put(code, val + 1);
+		}
+		else
+		{
+			observationMap.put(code, 1);
+		}
+	}
+
 
 	private static void getAllObservations() 
 	{
@@ -82,7 +266,7 @@ public class FHIRRunner3
 
 					System.out.println("Id: " + id + " Status: " + status + " System: "+ system + " Code: " + code2);
 					
-					if (system.equals(""))
+					if (!system.equals("http://loinc.org"))
 					{
 						System.out.println("Unknow Observation System: " + system);
 					}
