@@ -7,31 +7,111 @@ import java.util.Map;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.MediaType;
+// import javax.ws.rs.core.MediaType;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-public class FHIRRunner3 
+public class FHIRRunner 
 {
+	private static HashMap<String, Patient> patientTable = new HashMap<String, Patient>();
+	private static HashMap<String, Observation> observationTable = new HashMap<String, Observation>();
+	
 	public static void main(String[] args) 
 	{
 		// Get all Patients
-		// getAllPatients();
+		getAllPatients();
 		
 		// Get all Observations
-		// getAllObservations();
+		getAllObservations();
 		
 		// Get all Conditions
 		// getAllConditions();
 		
 		// Get all Medication
-		getAllMedicationDispence();
+		//getAllMedicationDispence();
+		
+		lookForInterestingPatient();		
 	}
 
 	
+	private static void lookForInterestingPatient() 
+	{
+		for (int i = 1; i <= 10; i++)
+		{
+			for (Map.Entry<String, Observation> entry : observationTable.entrySet()) 
+			{
+				String loincCode = entry.getValue().getLoincCode();
+				
+				if (!loincCode.equals("55284-4"))
+				{
+					final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
+					// String msg = "/Patient/1";
+
+					// HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
+
+					// Create a client
+					Client client = ClientBuilder.newClient();
+
+					// Set a target
+					String s = "?code=http://loinc.org%7C" + loincCode + "&patient=" + i;
+					String s2 = URI_BASE + "/Observation" + s;
+					WebTarget target = client.target(s2);
+					// System.out.println(s2);
+
+					// WebTarget target = client.target(URI_BASE + msg);
+
+					// Get a response
+					String result = target.request().get(String.class);
+
+					// System.out.println(result);
+					// System.out.println("\nResult length: " + result.length());
+
+					JSONParser parser = new JSONParser();
+
+					try 
+					{
+						JSONObject jsonResult = (JSONObject) parser.parse(result);
+
+						JSONArray patients = (JSONArray) jsonResult.get("entry");
+						// System.out.println("Size: " + patients.size());
+
+						Iterator iEntry = patients.iterator();
+						while (iEntry.hasNext()) 
+						{
+							JSONObject jsonEntry = (JSONObject) iEntry.next();
+							// System.out.println("fullUrl "+ jsonEntry.get("fullUrl"));
+
+							JSONObject resources = (JSONObject) jsonEntry.get("resource");
+							String id = (String) resources.get("id");
+							String status = (String) resources.get("status");
+							String effectiveDateTime = (String) resources.get("effectiveDateTime");
+
+
+							// System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate);
+
+							JSONObject valueQuantity = (JSONObject) resources.get("valueQuantity");
+							double value = (double) valueQuantity.get("value");
+							String unit = (String) valueQuantity.get("unit");
+							System.out.println(i + ", " + loincCode + ", " + effectiveDateTime + ", " + value + ", " + unit);
+						}
+					}
+					catch (ParseException e) 
+					{
+						e.printStackTrace();
+					}
+				}
+			}
+			
+			// System.out.println("\nSize of Observation Table: " + observationTable.size());
+			// printObservationTable_NEW();
+		}
+		
+	}
+
+
 	private static void getAllMedicationDispence() 
 	{
 		final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
@@ -214,7 +294,7 @@ public class FHIRRunner3
 		final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
 		// String msg = "/Patient/1";
 		
-		HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
+		// HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
 		
 		// Create a client
 		Client client = ClientBuilder.newClient();
@@ -263,6 +343,7 @@ public class FHIRRunner3
 					JSONObject innerObj = (JSONObject) iCoding.next();
 					String system = (String) innerObj.get("system");
 					String code2 = (String) innerObj.get("code");
+					String display = (String) innerObj.get("display");
 
 					System.out.println("Id: " + id + " Status: " + status + " System: "+ system + " Code: " + code2);
 					
@@ -272,7 +353,7 @@ public class FHIRRunner3
 					}
 					else
 					{
-						buildObservationTable(observationMap, code2);
+						buildObservationTable(code2, display);
 					}
 				}
 			}
@@ -282,22 +363,39 @@ public class FHIRRunner3
 			e.printStackTrace();
 		}
 		
-		System.out.println("\nSize of Observation Table: " + observationMap.size());
-		printObservationTable(observationMap);
+		System.out.println("\nSize of Observation Table: " + observationTable.size());
+		printObservationTable_NEW();
 	}
 
 
-	private static void buildObservationTable(HashMap<String, Integer> observationMap, 
-			String code) 
+	private static void buildObservationTable(String code, String display) 
 	{
-		if (observationMap.containsKey(code))
+		if (observationTable.containsKey(code))
 		{
-			int val = observationMap.get(code);
-			observationMap.put(code, val + 1);
+			Observation observation = observationTable.get(code);
+			observation.setLoincCode(code);
+			observation.setDisplay(display);
+			observation.setLoincCodeCount(observation.getLoincCodeCount()  + 1);
+			observationTable.put(code, observation);
 		}
 		else
 		{
-			observationMap.put(code, 1);
+			Observation observation = new Observation();
+			observation.setLoincCode(code);
+			observation.setDisplay(display);
+			observation.setLoincCodeCount(1);
+			observationTable.put(code, observation);
+		}
+	}
+	
+	
+	private static void printObservationTable_NEW() 
+	{
+		for (Map.Entry<String, Observation> entry : observationTable.entrySet()) 
+		{
+		    int loincCodeCount = entry.getValue().getLoincCodeCount();
+			System.out.println("Observation code = " + entry.getKey() + " , Display: " + entry.getValue().getDisplay() + " , Count = " + loincCodeCount);
+		    // System.out.println(entry.getValue());
 		}
 	}
 	
@@ -307,6 +405,7 @@ public class FHIRRunner3
 		for (Map.Entry<String, Integer> entry : map.entrySet()) 
 		{
 		    System.out.println("Observation code = " + entry.getKey() + ", Count = " + entry.getValue());
+		    // System.out.println(entry.getValue());
 		}
 	}
 	
@@ -365,12 +464,55 @@ public class FHIRRunner3
 					String zip = (String) innerObj.get("postalCode");
 
 					System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate + "State: "+ state + " Zip: " + zip);
+				
+					buildPatientTable(id, gender, birthDate, state, zip);
 				}
 			}
 		} 
 		catch (ParseException e) 
 		{
 			e.printStackTrace();
+		}
+		
+		System.out.println("\nSize of Patient Table: " + patientTable.size());
+		printPatientTable();
+	}
+	
+	private static void buildPatientTable(String id, String gender, String birthDate, String state, String zip) 
+	{
+		if (patientTable.containsKey(id))
+		{
+			Patient patient = patientTable.get(id);
+			patient.setId(id);
+			patient.setGender(gender);
+			patient.setBirthDate(birthDate);
+			patient.setState(state);
+			patient.setPostalCode(zip);
+			patientTable.put(id, patient);
+		}
+		else
+		{
+			Patient patient = new Patient();
+			patient.setId(id);
+			patient.setGender(gender);
+			patient.setBirthDate(birthDate);
+			patient.setState(state);
+			patient.setPostalCode(zip);
+			patientTable.put(id, patient);
+		}
+	}
+	
+	private static void printPatientTable() 
+	{
+		for (Map.Entry<String, Patient> entry : patientTable.entrySet()) 
+		{
+			String id = entry.getValue().getId();
+			String gender = entry.getValue().getGender();
+			String birthDate = entry.getValue().getBirthDate();
+			String state = entry.getValue().getState();
+			String postalCode = entry.getValue().getPostalCode();
+			
+			System.out.println(id + ", " + gender + ", " + birthDate + ", "  + state + ", " + postalCode);
 		}
 	}
 }
