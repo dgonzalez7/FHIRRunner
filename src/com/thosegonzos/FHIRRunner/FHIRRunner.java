@@ -15,6 +15,7 @@ import javax.ws.rs.client.WebTarget;
 // import javax.ws.rs.core.MediaType;
 
 
+
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -26,6 +27,7 @@ public class FHIRRunner
 	private static HashMap<String, Patient> patientTable = new HashMap<String, Patient>();
 	private static HashMap<String, Observation> observationTable = new HashMap<String, Observation>();
 	private static HashMap<String, Condition> conditionTable = new HashMap<String, Condition>();
+	private static HashMap<String, MedicationDispensed> medicationDispensedTable = new HashMap<String, MedicationDispensed>();
 	// private static HashMap<Integer, PatientObservation> patientObservationTable = new HashMap<Integer, PatientObservation>();
 	private static ArrayList<PatientObservation> patientObservationTable = new ArrayList<PatientObservation>();
 	private static ArrayList<PatientCondition> patientConditionTable = new ArrayList<PatientCondition>();
@@ -39,13 +41,13 @@ public class FHIRRunner
 		// getAllObservations();
 		
 		// Get all Conditions
-		getAllConditions();
+		// getAllConditions();
 		
 		// Get all Medication
-		// getAllMedicationDispence();
+		getAllMedicationDispence();
 		
 		// lookForPatientObservationa();
-		lookForPatientConditions();
+		// lookForPatientConditions();
 	}
 
 	private static void lookForPatientConditions() 
@@ -399,7 +401,7 @@ public class FHIRRunner
 					else
 					{
 						// TODO
-						buildMedicationTable(observationMap, code2);
+						buildMedicationTable(code2, system);
 					}
 				}
 			}
@@ -409,19 +411,44 @@ public class FHIRRunner
 			e.printStackTrace();
 		}
 		
-		System.out.println("\nSize of Medication Table: " + observationMap.size());
-		printObservationTable(observationMap);
+		System.out.println("\nSize of Medication Table: " + medicationDispensedTable.size());
+		printMedicationDispensedTable();
 	}
 
 
-	private static void buildMedicationTable(
-			HashMap<String, Integer> observationMap, String code2) 
+	private static void buildMedicationTable(String code, String system) 
 	{
-		// TODO Auto-generated method stub
+		if (medicationDispensedTable.containsKey(code))
+		{
+			MedicationDispensed md = medicationDispensedTable.get(code);
+			md.setCode(code);
+			// md.setDisplay(display);
+			md.setMedCodeCount(md.getMedCodeCount() + 1);
+			medicationDispensedTable.put(code, md);
+		}
+		else
+		{
+			MedicationDispensed md = new MedicationDispensed();
+			md.setCode(code);
+			// md.setDisplay(display);
+			md.setMedCodeCount(1);
+			medicationDispensedTable.put(code, md);
+		}
 		
 	}
 
 
+	private static void printMedicationDispensedTable() 
+	{
+		for (Map.Entry<String, MedicationDispensed> entry : medicationDispensedTable.entrySet()) 
+		{
+		    int medCodeCount = entry.getValue().getMedCodeCount();
+			// System.out.println("Observation code = " + entry.getKey() + " , Display: " + entry.getValue().getDisplay() + " , Count = " + snomedCount);
+			System.out.println(entry.getKey() + " , " + medCodeCount);
+		}
+	}
+	
+	
 	private static void getAllConditions() 
 	{
 		final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
