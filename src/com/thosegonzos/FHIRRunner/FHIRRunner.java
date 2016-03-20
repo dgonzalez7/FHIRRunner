@@ -1,5 +1,10 @@
 package com.thosegonzos.FHIRRunner;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -8,6 +13,7 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 // import javax.ws.rs.core.MediaType;
+
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -18,6 +24,8 @@ public class FHIRRunner
 {
 	private static HashMap<String, Patient> patientTable = new HashMap<String, Patient>();
 	private static HashMap<String, Observation> observationTable = new HashMap<String, Observation>();
+	// private static HashMap<Integer, PatientObservation> patientObservationTable = new HashMap<Integer, PatientObservation>();
+	private static ArrayList<PatientObservation> patientObservationTable = new ArrayList<PatientObservation>();
 	
 	public static void main(String[] args) 
 	{
@@ -39,38 +47,38 @@ public class FHIRRunner
 	
 	private static void lookForInterestingPatient() 
 	{
-		for (int i = 1; i <= 10; i++)
+		for (int i = 1; i <= 100; i++)
 		{
 			for (Map.Entry<String, Observation> entry : observationTable.entrySet()) 
 			{
 				String loincCode = entry.getValue().getLoincCode();
-				
+
+				final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
+				// String msg = "/Patient/1";
+
+				// HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
+
+				// Create a client
+				Client client = ClientBuilder.newClient();
+
+				// Set a target
+				String s = "?code=http://loinc.org%7C" + loincCode + "&patient=" + i;
+				String s2 = URI_BASE + "/Observation" + s;
+				WebTarget target = client.target(s2);
+				// System.out.println(s2);
+
+				// WebTarget target = client.target(URI_BASE + msg);
+
+				// Get a response
+				String result = target.request().get(String.class);
+
+				// System.out.println(result);
+				// System.out.println("\nResult length: " + result.length());
+
+				JSONParser parser = new JSONParser();
+
 				if (!loincCode.equals("55284-4"))
 				{
-					final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
-					// String msg = "/Patient/1";
-
-					// HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
-
-					// Create a client
-					Client client = ClientBuilder.newClient();
-
-					// Set a target
-					String s = "?code=http://loinc.org%7C" + loincCode + "&patient=" + i;
-					String s2 = URI_BASE + "/Observation" + s;
-					WebTarget target = client.target(s2);
-					// System.out.println(s2);
-
-					// WebTarget target = client.target(URI_BASE + msg);
-
-					// Get a response
-					String result = target.request().get(String.class);
-
-					// System.out.println(result);
-					// System.out.println("\nResult length: " + result.length());
-
-					JSONParser parser = new JSONParser();
-
 					try 
 					{
 						JSONObject jsonResult = (JSONObject) parser.parse(result);
@@ -88,6 +96,57 @@ public class FHIRRunner
 							String id = (String) resources.get("id");
 							String status = (String) resources.get("status");
 							String effectiveDateTime = (String) resources.get("effectiveDateTime");
+							String effectiveDate = effectiveDateTime.substring(0, 10);
+							String effectiveTime = effectiveDateTime.substring(11, 19);
+
+							// System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate);
+
+							JSONObject valueQuantity = (JSONObject) resources.get("valueQuantity");
+							double value = (double) valueQuantity.get("value");
+							String unit = (String) valueQuantity.get("unit");
+							// System.out.println(i + ", " + loincCode + ", " + effectiveDate + ", " + effectiveTime + ", " + value + ", " + unit);
+							
+							buildPatientObservationTable(i, loincCode, effectiveDate, effectiveTime, value, unit);
+						}
+					}
+					catch (ParseException e) 
+					{
+						e.printStackTrace();
+					}
+				}
+				else
+				{
+					try 
+					{
+						JSONObject jsonResult = (JSONObject) parser.parse(result);
+
+						JSONArray patients = (JSONArray) jsonResult.get("entry");
+						// System.out.println("Size: " + patients.size());
+
+						Iterator iEntry = patients.iterator();
+						while (iEntry.hasNext()) 
+						{
+							JSONObject jsonEntry = (JSONObject) iEntry.next();
+							// System.out.println("fullUrl "+ jsonEntry.get("fullUrl"));
+
+							JSONObject resources = (JSONObject) jsonEntry.get("resource");
+							JSONArray component = (JSONArray) jsonEntry.get("component");
+							
+							Iterator iComponent = patients.iterator();
+							while (iComponent.hasNext()) 
+							{
+								JSONObject jsonComponent = (JSONObject) iComponent.next();
+								
+							/*	
+								JSONObject valueQuantity = (JSONObject) resources.get("valueQuantity");
+								double value = (double) valueQuantity.get("value");
+								String unit = (String) valueQuantity.get("unit");
+								System.out.println(i + ", " + loincCode + ", " + effectiveDateTime + ", " + value + ", " + unit);
+													
+							
+							String id = (String) resources.get("id");
+							String status = (String) resources.get("status");
+							String effectiveDateTime = (String) resources.get("effectiveDateTime");
 
 
 							// System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate);
@@ -96,6 +155,8 @@ public class FHIRRunner
 							double value = (double) valueQuantity.get("value");
 							String unit = (String) valueQuantity.get("unit");
 							System.out.println(i + ", " + loincCode + ", " + effectiveDateTime + ", " + value + ", " + unit);
+							*/
+							}
 						}
 					}
 					catch (ParseException e) 
@@ -104,14 +165,54 @@ public class FHIRRunner
 					}
 				}
 			}
-			
-			// System.out.println("\nSize of Observation Table: " + observationTable.size());
-			// printObservationTable_NEW();
-		}
-		
+		}	
+		writePatientObservationFile();
 	}
 
 
+	private static void buildPatientObservationTable(int i, String loincCode,
+			String effectiveDate, String effectiveTime, double value, String unit) 
+	{
+		PatientObservation po = new PatientObservation();
+		po.setPatientId(i);
+		po.setLoincCode(loincCode);
+		po.setEffectiveDate(effectiveDate);
+		po.setEffectiveTime(effectiveTime);
+		po.setValue(value);
+		po.setUnit(unit);
+		patientObservationTable.add(po);
+	}
+
+
+	private static void writePatientObservationFile() 
+	{
+		try 
+		{
+			FileWriter fw = new FileWriter("PatientObservation.csv");
+			BufferedWriter bw = new BufferedWriter(fw);
+			
+			for (int i = 0; i < patientObservationTable.size(); i++)
+			// for (Map.Entry<Integer, PatientObservation> entry : patientObservationTable.entrySet()) 
+			{
+				int id = patientObservationTable.get(i).getPatientId();
+				String loincCode = patientObservationTable.get(i).getLoincCode();
+				String effectiveDate = patientObservationTable.get(i).getEffectiveDate();
+				String effectiveTime = patientObservationTable.get(i).getEffectiveTime();
+				double value = patientObservationTable.get(i).getValue();
+				String unit = patientObservationTable.get(i).getUnit();
+				
+				bw.write(id + ", " + loincCode + ", " + effectiveDate + ", " + effectiveTime + ", " + value + ", " + unit + "\n");
+			}
+			bw.close();
+			fw.close();
+		}
+		catch (IOException e) 
+		{
+			e.printStackTrace();
+		}
+	}
+
+	
 	private static void getAllMedicationDispence() 
 	{
 		final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
