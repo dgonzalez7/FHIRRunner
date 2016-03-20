@@ -20,12 +20,15 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
+
 public class FHIRRunner 
 {
 	private static HashMap<String, Patient> patientTable = new HashMap<String, Patient>();
 	private static HashMap<String, Observation> observationTable = new HashMap<String, Observation>();
+	private static HashMap<String, Condition> conditionTable = new HashMap<String, Condition>();
 	// private static HashMap<Integer, PatientObservation> patientObservationTable = new HashMap<Integer, PatientObservation>();
 	private static ArrayList<PatientObservation> patientObservationTable = new ArrayList<PatientObservation>();
+	private static ArrayList<PatientCondition> patientConditionTable = new ArrayList<PatientCondition>();
 	
 	public static void main(String[] args) 
 	{
@@ -33,19 +36,136 @@ public class FHIRRunner
 		getAllPatients();
 		
 		// Get all Observations
-		getAllObservations();
+		// getAllObservations();
 		
 		// Get all Conditions
-		// getAllConditions();
+		getAllConditions();
 		
 		// Get all Medication
-		//getAllMedicationDispence();
+		// getAllMedicationDispence();
 		
-		lookForInterestingPatient();		
+		// lookForPatientObservationa();
+		lookForPatientConditions();
+	}
+
+	private static void lookForPatientConditions() 
+	{
+		for (int i = 1; i <= 100; i++)
+		{
+			for (Map.Entry<String, Condition> entry : conditionTable.entrySet()) 
+			{
+				String snomedCode = entry.getValue().getSnomedCode();
+
+				final String URI_BASE = "http://polaris.i3l.gatech.edu:8080/gt-fhir-webapp/base";
+				// String msg = "/Patient/1";
+
+				// HashMap<String, Integer> observationMap = new HashMap<String, Integer>();
+
+				// Create a client
+				Client client = ClientBuilder.newClient();
+
+				// Set a target
+				String s = "?code=" + snomedCode + "&patient=" + i;
+				String s2 = URI_BASE + "/Condition" + s;
+				WebTarget target = client.target(s2);
+				// System.out.println(s2);
+
+				// WebTarget target = client.target(URI_BASE + msg);
+
+				// Get a response
+				String result = target.request().get(String.class);
+
+				// System.out.println(result);
+				// System.out.println("\nResult length: " + result.length());
+
+				JSONParser parser = new JSONParser();
+
+				try 
+				{
+					JSONObject jsonResult = (JSONObject) parser.parse(result);
+
+					JSONArray patients = (JSONArray) jsonResult.get("entry");
+					// System.out.println("Size: " + patients.size());
+					
+					if (patients != null)
+					{
+						// System.out.println("Null patients:  Patient: " + i + " Condition: " + snomedCode);
+
+						Iterator iEntry = patients.iterator();
+						while (iEntry.hasNext()) 
+						{
+							JSONObject jsonEntry = (JSONObject) iEntry.next();
+							// System.out.println("fullUrl "+ jsonEntry.get("fullUrl"));
+
+							JSONObject resources = (JSONObject) jsonEntry.get("resource");
+							String id = (String) resources.get("id");
+							// String status = (String) resources.get("status");
+							String onsetDateTime = (String) resources.get("onsetDateTime");
+							String onsetDate = onsetDateTime.substring(0, 10);
+							String onsetTime = onsetDateTime.substring(11, 19);
+
+							// System.out.println("Id: " + id + " Gender: " + gender + " Birth Date: " + birthDate);
+
+							// JSONObject valueQuantity = (JSONObject) resources.get("valueQuantity");
+							// double value = (double) valueQuantity.get("value");
+							// String unit = (String) valueQuantity.get("unit");
+							// System.out.println(i + ", " + loincCode + ", " + effectiveDate + ", " + effectiveTime + ", " + value + ", " + unit);
+
+							buildPatientConditionTable(i, snomedCode, onsetDate, onsetTime);
+						}
+					}
+				}
+				catch (ParseException e) 
+				{
+					e.printStackTrace();
+				}
+			}
+		}	
+		writePatientConditionFile();
+	}
+	
+
+	private static void buildPatientConditionTable(int i, String snomedCode,
+			String onsetDate, String onsetTime) 
+	{
+		PatientCondition pc = new PatientCondition();
+		pc.setPatientId(i);
+		pc.setSnomedCode(snomedCode);
+		pc.setOnsetDate(onsetDate);
+		pc.setOnsetTime(onsetTime);
+		patientConditionTable.add(pc);
 	}
 
 	
-	private static void lookForInterestingPatient() 
+	
+	private static void writePatientConditionFile() 
+	{
+		try 
+		{
+			FileWriter fw = new FileWriter("PatientCondition.csv");
+			BufferedWriter bw = new BufferedWriter(fw);
+			
+			for (int i = 0; i < patientConditionTable.size(); i++)
+			// for (Map.Entry<Integer, PatientObservation> entry : patientObservationTable.entrySet()) 
+			{
+				int id = patientConditionTable.get(i).getPatientId();
+				String snomedCode = patientConditionTable.get(i).getSnomedCode();
+				String onsetDate = patientConditionTable.get(i).getOnsetDate();
+				String onsetTime = patientConditionTable.get(i).getOnsetTime();
+				
+				bw.write(id + ", " + snomedCode + ", " + onsetDate + ", " + onsetTime + "\n");
+			}
+			bw.close();
+			fw.close();
+		}
+		catch (IOException e) 
+		{
+			e.printStackTrace();
+		}
+	}
+	
+	
+	private static void lookForPatientObservationa() 
 	{
 		for (int i = 1; i <= 100; i++)
 		{
@@ -278,7 +398,8 @@ public class FHIRRunner
 					}
 					else
 					{
-						buildConditionTable(observationMap, code2);
+						// TODO
+						buildMedicationTable(observationMap, code2);
 					}
 				}
 			}
@@ -290,6 +411,14 @@ public class FHIRRunner
 		
 		System.out.println("\nSize of Medication Table: " + observationMap.size());
 		printObservationTable(observationMap);
+	}
+
+
+	private static void buildMedicationTable(
+			HashMap<String, Integer> observationMap, String code2) 
+	{
+		// TODO Auto-generated method stub
+		
 	}
 
 
@@ -317,7 +446,7 @@ public class FHIRRunner
 		System.out.println("\nResult length: " + result.length());
 
 		JSONParser parser = new JSONParser();
-		
+		int c = 0;
 		try 
 		{
 			JSONObject jsonResult = (JSONObject) parser.parse(result);
@@ -342,6 +471,7 @@ public class FHIRRunner
 				JSONArray coding = (JSONArray) code.get("coding");
 				
 				// Handle an odd exception (Condition 194)
+
 				if (coding != null)
 				{
 					Iterator iCoding = coding.iterator();
@@ -351,6 +481,7 @@ public class FHIRRunner
 						JSONObject innerObj = (JSONObject) iCoding.next();
 						String system = (String) innerObj.get("system");
 						String code2 = (String) innerObj.get("code");
+						String display = (String) innerObj.get("display");
 
 						System.out.println("Id: " + id + " System: "+ system + " Code: " + code2);
 
@@ -360,7 +491,7 @@ public class FHIRRunner
 						}
 						else
 						{
-							buildConditionTable(observationMap, code2);
+							buildConditionTable(code2, display);
 						}
 					}
 				}
@@ -370,22 +501,38 @@ public class FHIRRunner
 		{
 			e.printStackTrace();
 		}
-		
-		System.out.println("\nSize of Condition Table: " + observationMap.size());
-		printObservationTable(observationMap);
+		System.out.println("\nSize of Condition Table: " + conditionTable.size());
+		printConditionTable();
 	}
 
-	private static void buildConditionTable(
-			HashMap<String, Integer> observationMap, String code) 
+	private static void buildConditionTable(String code, String display) 
 	{
-		if (observationMap.containsKey(code))
+		if (conditionTable.containsKey(code))
 		{
-			int val = observationMap.get(code);
-			observationMap.put(code, val + 1);
+			Condition condition = conditionTable.get(code);
+			condition.setSnomedCode(code);
+			condition.setDisplay(display);
+			condition.setSnomedCodeCount(condition.getSnomedCodeCount()  + 1);
+			conditionTable.put(code, condition);
 		}
 		else
 		{
-			observationMap.put(code, 1);
+			Condition condition = new Condition();
+			condition.setSnomedCode(code);
+			condition.setDisplay(display);
+			condition.setSnomedCodeCount(1);
+			conditionTable.put(code, condition);
+		}
+	}
+	
+	
+	private static void printConditionTable() 
+	{
+		for (Map.Entry<String, Condition> entry : conditionTable.entrySet()) 
+		{
+		    int snomedCount = entry.getValue().getSnomedCodeCount();
+			// System.out.println("Observation code = " + entry.getKey() + " , Display: " + entry.getValue().getDisplay() + " , Count = " + snomedCount);
+			System.out.println(entry.getKey() + " , " + entry.getValue().getDisplay() + " , " + snomedCount);
 		}
 	}
 
@@ -505,7 +652,8 @@ public class FHIRRunner
 	{
 		for (Map.Entry<String, Integer> entry : map.entrySet()) 
 		{
-		    System.out.println("Observation code = " + entry.getKey() + ", Count = " + entry.getValue());
+		    // System.out.println("Conditions code = " + entry.getKey() + ", Count = " + entry.getValue());
+		    System.out.println(entry.getKey() + ", " + entry.getValue());
 		    // System.out.println(entry.getValue());
 		}
 	}
